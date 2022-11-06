@@ -1,0 +1,120 @@
+#!csharp
+
+#r "nuget:MarkMpn.Sql4Cds.Engine"
+#r "nuget:System.Text.Json"
+#r "nuget:Microsoft.PowerPlatform.Dataverse.Client"
+#r "nuget:Azure.Identity"
+
+#!csharp
+
+using MarkMpn.Sql4Cds.Engine;
+using static System.Console;
+using System.Data;
+using System.Linq;
+using System.Collections;
+using System.Collections.Generic;
+using Azure.Core;
+using Azure.Identity;
+using Microsoft.PowerPlatform.Dataverse.Client;
+using Microsoft.Xrm.Sdk;
+using Microsoft.Xrm.Sdk.Metadata;
+using Microsoft.Crm.Sdk.Messages;
+using System.Text.Json;
+using System.Runtime.Caching;
+using Microsoft.DotNet.Interactive;
+using System.CommandLine;
+using System.CommandLine.Invocation;
+using Microsoft.DotNet.Interactive.Commands;
+
+#!csharp
+
+public async Task<string> RunSQL(string query, string environment = "", string connectionString = "")
+{
+    ObjectCache cache = MemoryCache.Default;
+    using var con = string.IsNullOrEmpty(connectionString) ? 
+        new Sql4CdsConnection(
+            new ServiceClient(
+                tokenProviderFunction: async f => await GetToken(environment, new DefaultAzureCredential(), cache),
+                useUniqueInstance: true,
+                instanceUrl: new Uri(environment))) 
+        : new Sql4CdsConnection(connectionString);
+    using var cmd = con.CreateCommand();
+    // Get the IDs of all accounts with the same name
+    cmd.CommandText = query;
+    var table = new List<Dictionary<string,object>>();
+    using var reader = await cmd.ExecuteReaderAsync();
+    int rowCount = 1;
+    while (await reader.ReadAsync())
+    {
+        var rows = new Dictionary<string,object>();
+        for (var i = 0; i < reader.FieldCount; i++)
+        {
+            if(i == 0)
+                rows["#"] = rowCount++;
+            rows[reader.GetName(i)] = reader.GetValue(i);
+        }
+        table.Add(rows);
+    }
+    var results = JsonSerializer.Serialize(table, options: new JsonSerializerOptions { WriteIndented=true });
+    if(table.Any())
+    {
+        var markDownResult = new StringBuilder();
+        markDownResult.AppendLine($@"| {string.Join(" | ", table[0].Keys)} |");
+        markDownResult.AppendLine($@"| {string.Join(" | ", table[0].Keys.Select(k => "-"))} |");
+        markDownResult.AppendLine($@"{string.Join($"{Environment.NewLine}", table.Select(r => $@"| {string.Join(" | ", r.Values)} |"))}");
+        markDownResult.ToString().DisplayAs("text/markdown");    
+        //results.DisplayAs("application/json");
+    }
+    else
+    {
+        "<h3>No results</h3>".DisplayAs("text/html");
+    }
+    return results;
+}
+
+private async Task<string> GetToken(string environment, DefaultAzureCredential credential, ObjectCache cache)
+{
+    //TokenProviderFunction is called multiple times, so we need to check if we already have a token in the cache
+    var accessToken = cache.Get(environment);
+    if (accessToken == null)
+    {
+        accessToken = (await credential.GetTokenAsync(new TokenRequestContext(new[] { $"{environment}/.default" })));
+        cache.Set(environment, accessToken, new CacheItemPolicy { AbsoluteExpiration = DateTimeOffset.UtcNow.AddMinutes(50) });
+    }
+    return ((AccessToken)accessToken).Token;
+}
+
+#!csharp
+
+var environmentOption = new Option<string>("--environment", "Environment URL to connect to e.g. https://org.crm.dynamics.com");
+environmentOption.AddAlias("-e");
+var connectionString = new Option<string>("--connectionString", "Connection string for the Dataverse environment");
+connectionString.AddAlias("-c");
+var runSQLCommand = new Command("#!dataverse-sql", "Run a SQL query against Dataverse using SQL4CDS"){ environmentOption, connectionString };
+runSQLCommand.SetHandler((string environmentValue, string connectionStringValue) =>
+{
+    Kernel.Root.AddMiddleware(async (command, context, next) =>
+    {
+        if (command is SubmitCode submitCode && submitCode.TargetKernelName == "sql")
+        {
+            var originalCode = (submitCode.Parent as SubmitCode).Code.Replace(submitCode.Code,"").Replace(@"""","");
+            var environmentUrlIndex = originalCode.IndexOf("-e");
+            var connectionStringIndex = originalCode.IndexOf("-c");
+            if(environmentUrlIndex > -1)
+                environmentValue = originalCode.Substring(environmentUrlIndex).Replace(@"-e","").Trim();
+            if(connectionStringIndex > -1)
+                connectionStringValue = originalCode.Substring(connectionStringIndex).Replace(@"-c","").Trim();                
+            await RunSQL(submitCode.Code, environmentValue, connectionStringValue);
+        }
+        else
+        {
+            await next(command, context);
+        }
+    });    
+}, environmentOption, connectionString);
+Kernel.Root.AddDirective(runSQLCommand);
+@"<details><summary><code>#!dataverse-sql</code> magic command added.</summary>
+    <p>Use <code>#!dataverse-sql</code> <i>--environment</i> ""[Power Apps environment Url] e.g. https://org.crm.dynamics.com"".</p>
+    <p>[SQL Query] e.g. <code>select count(*) AS usercount from systemusers</code></p>
+    <p>If <i>--connectionString</i> parameter is not specified, SQL4CDS will connect using Azure authentication (Azure CLI, Visual Studio Code, Azure PowerShell</p>
+    </details>".DisplayAs("text/html");

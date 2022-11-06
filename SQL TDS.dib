@@ -1,0 +1,52 @@
+#!csharp
+
+#r "nuget: Microsoft.DotNet.Interactive.SqlServer, *-*"
+
+#!csharp
+
+#!connect mssql --kernel-name dreamingincrm "Server=dreamingincrm.crm6.dynamics.com; Authentication=Active Directory Interactive;"
+
+#!markdown
+
+### List of managed solutions
+
+#!sql
+
+#!sql-dreamingincrm
+
+SELECT solutionid, friendlyname, uniquename 
+FROM Solution
+WHERE isvisible=1 AND ismanaged=1
+ORDER by friendlyname
+
+#!markdown
+
+### Top 10 users sorted by createdon desc
+
+#!sql
+
+#!sql-dreamingincrm
+
+SELECT TOP 10 systemuserid,fullname,internalemailaddress 
+FROM SystemUser
+ORDER BY createdon DESC
+
+#!markdown
+
+### List of Code Components
+
+The query below will not work because _customcontrol_ entity is not available in the Dataverse TDS endpoint.
+
+#!sql
+
+#!sql-dreamingincrm
+
+SELECT 
+solution.friendlyname AS Solution, 
+customcontrol.Name, 
+customcontrol.CompatibleDataTypes, 
+customcontrol.ComponentState, 
+customcontrol.Version, customcontrol.createdon
+FROM customcontrol
+join solution ON customcontrol.solutionid = solution.solutionid
+ORDER BY customcontrol.createdon DESC
