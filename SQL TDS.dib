@@ -79,3 +79,14 @@ sdkmessagefilter.IsCustomProcessingStepAllowed = 1
 AND sdkmessageprocessingstep.IsHidden = 0
 AND sdkmessageprocessingstep.CustomizationLevel = 1
 ORDER BY sdkmessagefilter.PrimaryObjectTypeCode,sdkmessage.Name,plugintype.AssemblyName, plugintype.Name
+
+#!markdown
+
+### Variable sharing
+
+Notebooks support variable sharing. The previous query result is stored in the _lastResults_ variable inside the C# kernel. So, you can use this value inside a C# cell as seen in the example below.
+
+#!csharp
+
+#!share --from sql-dreamingincrm lastResults
+lastResults

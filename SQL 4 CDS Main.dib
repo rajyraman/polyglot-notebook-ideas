@@ -3,6 +3,7 @@
 #r "nuget:MarkMpn.Sql4Cds.Engine"
 #r "nuget:Microsoft.PowerPlatform.Dataverse.Client"
 #r "nuget:Azure.Identity"
+#r "nuget:System.Text.Json"
 
 #!csharp
 
@@ -23,8 +24,11 @@ using Microsoft.DotNet.Interactive;
 using System.CommandLine;
 using System.CommandLine.Invocation;
 using Microsoft.DotNet.Interactive.Commands;
+using System.Text.Json;
 
 #!csharp
+
+var lastResults = string.Empty;
 
 private async Task<string> RunSQL(string query, string environment = "", string connectionString = "")
 {
@@ -53,8 +57,7 @@ private async Task<string> RunSQL(string query, string environment = "", string 
         }
         table.Add(rows);
     }
-    //var results = JsonSerializer.Serialize(table, options: new JsonSerializerOptions { WriteIndented=true });
-    var results = string.Empty;
+    lastResults = JsonSerializer.Serialize(table, options: new JsonSerializerOptions { WriteIndented = true });
     if(table.Any())
     {
         // var markDownResult = new StringBuilder();
@@ -67,8 +70,7 @@ private async Task<string> RunSQL(string query, string environment = "", string 
         var csvResult = new StringBuilder();
         csvResult.AppendLine($@"{string.Join(",", table[0].Keys.Select(k=>$@"""{k}"""))}");
         csvResult.AppendLine($@"{string.Join($"{Environment.NewLine}", table.Select(r => $@"{string.Join(",", r.Values.Select(v => $@"""{v}"""))}"))}");
-        results = csvResult.ToString();
-        results.DisplayAs("text/csv");
+        csvResult.ToString().DisplayAs("text/csv");
         
         //https://marketplace.visualstudio.com/items?itemName=RandomFractalsInc.vscode-data-table does not render JSON after reloading the notebook. So, cannot use Flat Data Grid Renderer with JSON output.
         // results.DisplayAs("application/json");
@@ -77,7 +79,7 @@ private async Task<string> RunSQL(string query, string environment = "", string 
     {
         "<h3>No results</h3>".DisplayAs("text/html");
     }
-    return results;
+    return lastResults;
 }
 
 private async Task<string> GetToken(string environment, DefaultAzureCredential credential, ObjectCache cache)
@@ -99,8 +101,10 @@ environmentOption.AddAlias("-e");
 var connectionString = new Option<string>("--connectionString", "Connection string for the Dataverse environment");
 connectionString.AddAlias("-c");
 var runSQLCommand = new Command("#!dataverse-sql", "Run a SQL query against Dataverse using SQL4CDS"){ environmentOption, connectionString };
+
 runSQLCommand.SetHandler((string environmentValue, string connectionStringValue) =>
 {
+    //Using AddMiddleware and parsing parsing SQL because passing the query using magic command params feels clunky.
     Kernel.Root.AddMiddleware(async (command, context, next) =>
     {
         if (command is SubmitCode submitCode && submitCode.TargetKernelName == "sql")
@@ -121,8 +125,29 @@ runSQLCommand.SetHandler((string environmentValue, string connectionStringValue)
     });    
 }, environmentOption, connectionString);
 Kernel.Root.AddDirective(runSQLCommand);
-@"<details><summary><code>#!dataverse-sql</code> magic command added.</summary>
-    <p>Use <code>#!dataverse-sql</code> <i>--environment</i> ""[Power Apps environment Url] e.g. https://org.crm.dynamics.com"".</p>
-    <p>[SQL Query] e.g. <code>select count(*) AS usercount from systemusers</code></p>
-    <p>If <i>--connectionString</i> parameter is not specified, SQL4CDS will connect using Azure authentication (Azure CLI, Visual Studio Code, Azure PowerShell</p>
-    </details>".DisplayAs("text/html");
+@"<div>
+    <p>
+        <code>#!dataverse-sql</code> magic command added.
+    </p>
+    <p>Use <code>#!dataverse-sql</code> <i>-e</i> ""[Dataverse environment Url]""<br>
+    or <code>#!dataverse-sql</code> <i>-c</i> ""[Dataverse environment Connection String]"".</p>
+    <p>If <i>-c</i> parameter is not specified, SQL 4 CDS will connect using Azure authentication(Azure CLI, Visual Studio Code, Azure PowerShell</p>
+    <p>Examples</p>
+    <p>
+    <code>
+    #!dataverse-sql -e https://org.crm.dynamics.com<br>
+    SELECT TOP 10 solutionid, friendlyname, uniquename FROM Solution
+    </code>
+    </p>
+    <p>
+    <code>
+    #!dataverse-sql -c ""AuthType=OAuth; Url=https://org.crm.dynamics.com; AppId=51f81489-12ee-4a9e-aaae-a2591f45987d; RedirectUri=http://localhost; TokenCacheStorePath=.\tokencache; LoginPrompt=Auto""<br>
+    SELECT TOP 10 solutionid, friendlyname, uniquename FROM Solution
+    </code>
+    </p>
+    <p>Since there is no Intellisense on the Notebook cells the best options to craft your SQL queries is either use SQL Server Management Studio (<a target=""_blank"" href=""https://learn.microsoft.com/en-us/power-apps/developer/data-platform/dataverse-sql-query"">connect to TDS endpoint</a>)
+    or use XrmToolBox's <a target=""_blank"" href=""https://markcarrington.dev/sql-4-cds/"">SQL 4 CDS tool.</a></p>
+    <p>
+    Do not mix -e or -c switch inside a single Notebook i.e. use either connection strings or Azure authentication for Dataverse authentication.
+    </p>
+</div>".DisplayAs("text/html");
