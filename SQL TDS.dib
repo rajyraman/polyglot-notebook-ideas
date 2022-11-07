@@ -50,3 +50,32 @@ customcontrol.Version, customcontrol.createdon
 FROM customcontrol
 join solution ON customcontrol.solutionid = solution.solutionid
 ORDER BY customcontrol.createdon DESC
+
+#!markdown
+
+### List of Plugins
+
+#!sql
+
+#!sql-dreamingincrm
+
+SELECT 
+sdkmessagefilter.PrimaryObjectTypeCode,
+sdkmessage.Name AS Message, 
+sdkmessageprocessingstep.Rank, 
+sdkmessageprocessingstep.StageName, 
+plugintype.AssemblyName, 
+plugintype.Name AS PluginName, 
+sdkmessageprocessingstep.Name AS StepName, 
+sdkmessageprocessingstep.Description AS StepDescription, 
+sdkmessageprocessingstep.StatusCodeName,
+sdkmessageprocessingstep.FilteringAttributes
+FROM sdkmessageprocessingstep
+JOIN sdkmessagefilter ON SdkMessageProcessingStep.sdkmessagefilterid = sdkmessagefilter.sdkmessagefilterid
+JOIN sdkmessage ON sdkmessagefilter.sdkmessageid = sdkmessage.sdkmessageid
+JOIN plugintype ON sdkmessageprocessingstep.eventhandler = plugintype.plugintypeid
+WHERE 
+sdkmessagefilter.IsCustomProcessingStepAllowed = 1
+AND sdkmessageprocessingstep.IsHidden = 0
+AND sdkmessageprocessingstep.CustomizationLevel = 1
+ORDER BY sdkmessagefilter.PrimaryObjectTypeCode,sdkmessage.Name,plugintype.AssemblyName, plugintype.Name

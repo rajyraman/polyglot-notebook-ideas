@@ -1,7 +1,6 @@
 #!csharp
 
 #r "nuget:MarkMpn.Sql4Cds.Engine"
-#r "nuget:System.Text.Json"
 #r "nuget:Microsoft.PowerPlatform.Dataverse.Client"
 #r "nuget:Azure.Identity"
 
@@ -19,7 +18,6 @@ using Microsoft.PowerPlatform.Dataverse.Client;
 using Microsoft.Xrm.Sdk;
 using Microsoft.Xrm.Sdk.Metadata;
 using Microsoft.Crm.Sdk.Messages;
-using System.Text.Json;
 using System.Runtime.Caching;
 using Microsoft.DotNet.Interactive;
 using System.CommandLine;
@@ -28,7 +26,7 @@ using Microsoft.DotNet.Interactive.Commands;
 
 #!csharp
 
-public async Task<string> RunSQL(string query, string environment = "", string connectionString = "")
+private async Task<string> RunSQL(string query, string environment = "", string connectionString = "")
 {
     ObjectCache cache = MemoryCache.Default;
     using var con = string.IsNullOrEmpty(connectionString) ? 
@@ -55,15 +53,25 @@ public async Task<string> RunSQL(string query, string environment = "", string c
         }
         table.Add(rows);
     }
-    var results = JsonSerializer.Serialize(table, options: new JsonSerializerOptions { WriteIndented=true });
+    //var results = JsonSerializer.Serialize(table, options: new JsonSerializerOptions { WriteIndented=true });
+    var results = string.Empty;
     if(table.Any())
     {
-        var markDownResult = new StringBuilder();
-        markDownResult.AppendLine($@"| {string.Join(" | ", table[0].Keys)} |");
-        markDownResult.AppendLine($@"| {string.Join(" | ", table[0].Keys.Select(k => "-"))} |");
-        markDownResult.AppendLine($@"{string.Join($"{Environment.NewLine}", table.Select(r => $@"| {string.Join(" | ", r.Values)} |"))}");
-        markDownResult.ToString().DisplayAs("text/markdown");    
-        //results.DisplayAs("application/json");
+        // var markDownResult = new StringBuilder();
+        // markDownResult.AppendLine($@"| {string.Join(" | ", table[0].Keys)} |");
+        // markDownResult.AppendLine($@"| {string.Join(" | ", table[0].Keys.Select(k => "-"))} |");
+        // markDownResult.AppendLine($@"{string.Join($"{Environment.NewLine}", table.Select(r => $@"| {string.Join(" | ", r.Values)} |"))}");
+        // markDownResult.ToString().DisplayAs("text/markdown");
+
+        //https://marketplace.visualstudio.com/items?itemName=RandomFractalsInc.vscode-data-table has no issues with CSV after reload.
+        var csvResult = new StringBuilder();
+        csvResult.AppendLine($@"{string.Join(",", table[0].Keys.Select(k=>$@"""{k}"""))}");
+        csvResult.AppendLine($@"{string.Join($"{Environment.NewLine}", table.Select(r => $@"{string.Join(",", r.Values.Select(v => $@"""{v}"""))}"))}");
+        results = csvResult.ToString();
+        results.DisplayAs("text/csv");
+        
+        //https://marketplace.visualstudio.com/items?itemName=RandomFractalsInc.vscode-data-table does not render JSON after reloading the notebook. So, cannot use Flat Data Grid Renderer with JSON output.
+        // results.DisplayAs("application/json");
     }
     else
     {
