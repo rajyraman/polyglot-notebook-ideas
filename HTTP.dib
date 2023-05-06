@@ -1,0 +1,70 @@
+#!meta
+
+{"kernelInfo":{"defaultKernelName":"csharp","items":[{"aliases":[],"name":"csharp"},{"aliases":[],"languageName":"HTTP","name":"http"}]}}
+
+#!csharp
+
+using Microsoft.DotNet.Interactive;
+using Microsoft.DotNet.Interactive.Commands;
+using Microsoft.DotNet.Interactive.Events;
+using Microsoft.DotNet.Interactive.Formatting;
+#r "nuget:Microsoft.DotNet.Interactive.HttpRequest, *-*"
+
+#!markdown
+
+### Add Kernel Event Handler to process HTTP response
+
+#!csharp
+
+var responseBody = "";
+KernelCommand kc = null;
+
+Kernel.Root.KernelEvents.Subscribe(e =>
+{
+    if (e is DisplayedValueProduced de && e.Command.TargetKernelName == "http")
+    {
+        var dvp = de as DisplayedValueProduced;
+        responseBody = "";
+        responseBody = dvp.FormattedValues.ElementAt(1).Value;
+        responseBody = responseBody.Substring(responseBody.IndexOf("Body:")+6);
+        Kernel.Root.SendAsync(new SendEditableCode("markdown", $"### Response{Environment.NewLine}```json{Environment.NewLine}{responseBody}"));
+    }
+});
+
+#!markdown
+
+### Get Bearer Token from Azure CLI
+
+#!pwsh
+
+#!set --name url --value @input:"Please enter the Dataverse Environment URL"
+
+#!pwsh
+
+$token="Bearer $(az account get-access-token --resource=$url --query accessToken --output tsv)"
+
+#!markdown
+
+### Share Token and Url with HTTP Kernel
+
+#!http
+
+#!set --name token --value @pwsh:token --mime-type text/plain
+
+#!http
+
+#!set --name url --value @pwsh:url --mime-type text/plain
+
+#!markdown
+
+### Execute WhoAmI request
+
+#!http
+
+GET {{url}}/api/data/v9.2/WhoAmI()
+Accept: application/json
+Authorization: {{token}}
+
+#!csharp
+
+responseBody

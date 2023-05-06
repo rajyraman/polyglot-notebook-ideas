@@ -1,3 +1,7 @@
+#!meta
+
+{"kernelInfo":{"defaultKernelName":"csharp","items":[{"aliases":[],"name":"csharp"}]}}
+
 #!csharp
 
 #r "nuget: Microsoft.DotNet.Interactive.SqlServer, *-*"
