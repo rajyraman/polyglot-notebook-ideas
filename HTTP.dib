@@ -4,10 +4,6 @@
 
 #!csharp
 
-using Microsoft.DotNet.Interactive;
-using Microsoft.DotNet.Interactive.Commands;
-using Microsoft.DotNet.Interactive.Events;
-using Microsoft.DotNet.Interactive.Formatting;
 #r "nuget:Microsoft.DotNet.Interactive.HttpRequest, *-*"
 
 #!markdown
@@ -16,17 +12,23 @@ using Microsoft.DotNet.Interactive.Formatting;
 
 #!csharp
 
+using Microsoft.DotNet.Interactive;
+using Microsoft.DotNet.Interactive.Commands;
+using Microsoft.DotNet.Interactive.Events;
+using Microsoft.DotNet.Interactive.Formatting;
+using System.Linq;
+using System.Text.Json;
 var responseBody = "";
-KernelCommand kc = null;
 
 Kernel.Root.KernelEvents.Subscribe(e =>
 {
     if (e is DisplayedValueProduced de && e.Command.TargetKernelName == "http")
     {
         var dvp = de as DisplayedValueProduced;
-        responseBody = "";
-        responseBody = dvp.FormattedValues.ElementAt(1).Value;
-        responseBody = responseBody.Substring(responseBody.IndexOf("Body:")+6);
+        var jsonResponse = dvp.FormattedValues.First(x=>x.MimeType == "application/json").Value.ToString();
+        var content = JsonDocument.Parse(jsonResponse).RootElement.GetProperty("Content").ToString();
+        var rawResponse = JsonDocument.Parse(content).RootElement.GetProperty("Raw").ToString();
+        responseBody = JsonSerializer.Serialize(JsonSerializer.Deserialize<object>(rawResponse), new JsonSerializerOptions { WriteIndented = true });
         Kernel.Root.SendAsync(new SendEditableCode("markdown", $"### Response{Environment.NewLine}```json{Environment.NewLine}{responseBody}"));
     }
 });
@@ -50,9 +52,6 @@ $token="Bearer $(az account get-access-token --resource=$url --query accessToken
 #!http
 
 #!set --name token --value @pwsh:token --mime-type text/plain
-
-#!http
-
 #!set --name url --value @pwsh:url --mime-type text/plain
 
 #!markdown
@@ -61,10 +60,6 @@ $token="Bearer $(az account get-access-token --resource=$url --query accessToken
 
 #!http
 
-GET {{url}}/api/data/v9.2/WhoAmI()
+GET {{url}}/api/data/v9.2/WhoAmI
 Accept: application/json
 Authorization: {{token}}
-
-#!csharp
-
-responseBody
