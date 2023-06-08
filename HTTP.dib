@@ -19,9 +19,11 @@ using Microsoft.DotNet.Interactive.Formatting;
 using System.Linq;
 using System.Text.Json;
 var responseBody = "";
-
+var httpKernelEvents = new List<KernelEvent>();
 Kernel.Root.KernelEvents.Subscribe(e =>
 {
+    if(e.Command.TargetKernelName == "http")
+        httpKernelEvents.Add(e);
     if (e is DisplayedValueProduced de && e.Command.TargetKernelName == "http")
     {
         var dvp = de as DisplayedValueProduced;
@@ -29,7 +31,14 @@ Kernel.Root.KernelEvents.Subscribe(e =>
         var content = JsonDocument.Parse(jsonResponse).RootElement.GetProperty("Content").ToString();
         var rawResponse = JsonDocument.Parse(content).RootElement.GetProperty("Raw").ToString();
         responseBody = JsonSerializer.Serialize(JsonSerializer.Deserialize<object>(rawResponse), new JsonSerializerOptions { WriteIndented = true });
-        Kernel.Root.SendAsync(new SendEditableCode("markdown", $"### Response{Environment.NewLine}```json{Environment.NewLine}{responseBody}"));
+        if(dvp.Command is SubmitCode sc)
+        {
+            Kernel.Root.SendAsync(new SendEditableCode("markdown", $"### {sc.Code.Split("\n").First()}{Environment.NewLine}```json{Environment.NewLine}{responseBody}"));
+        }
+        else 
+        {
+            Kernel.Root.SendAsync(new SendEditableCode("markdown", $"### Response{Environment.NewLine}```json{Environment.NewLine}{responseBody}"));
+        }
     }
 });
 
@@ -60,6 +69,6 @@ $token="Bearer $(az account get-access-token --resource=$url --query accessToken
 
 #!http
 
-GET {{url}}/api/data/v9.2/WhoAmI
+GET {{url}}/api/data/v9.2/systemusers?$select=fullname&$top=5
 Accept: application/json
 Authorization: {{token}}
