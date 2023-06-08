@@ -19,11 +19,11 @@ using Microsoft.DotNet.Interactive.Formatting;
 using System.Linq;
 using System.Text.Json;
 var responseBody = "";
-var httpKernelEvents = new List<KernelEvent>();
+// var httpKernelEvents = new List<KernelEvent>();
 Kernel.Root.KernelEvents.Subscribe(e =>
 {
-    if(e.Command.TargetKernelName == "http")
-        httpKernelEvents.Add(e);
+    // if(e.Command.TargetKernelName == "http")
+    //     httpKernelEvents.Add(e);
     if (e is DisplayedValueProduced de && e.Command.TargetKernelName == "http")
     {
         var dvp = de as DisplayedValueProduced;
